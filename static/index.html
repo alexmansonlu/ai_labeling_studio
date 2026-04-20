@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Label Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{background:#16213e;padding:8px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #0f3460;flex-shrink:0;flex-wrap:wrap}
+header h1{font-size:1rem;font-weight:700;color:#e94560;letter-spacing:1px}
+header select,header input,header button{background:#0f3460;border:1px solid #e94560;color:#e0e0e0;border-radius:4px;padding:4px 8px;font-size:.85rem}
+header button{cursor:pointer;transition:background .2s}
+header button:hover{background:#e94560;color:#fff}
+#task-badge{font-size:.72rem;padding:2px 8px;border-radius:10px;background:#0f3460;border:1px solid #555;color:#aaa;letter-spacing:.5px;text-transform:uppercase}
+#task-badge.detection{border-color:#00b4d8;color:#00b4d8}
+#task-badge.classification{border-color:#80ed99;color:#80ed99}
+#main{display:flex;flex:1;overflow:hidden}
+
+/* sidebar */
+#sidebar{width:210px;background:#16213e;border-right:1px solid #0f3460;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.sidebar-section{padding:8px;border-bottom:1px solid #0f3460}
+.sidebar-section h3{font-size:.72rem;text-transform:uppercase;color:#888;margin-bottom:6px;letter-spacing:.5px}
+#image-list{flex:1;overflow-y:auto;padding:4px}
+.img-item{padding:5px 8px;cursor:pointer;border-radius:4px;font-size:.78rem;word-break:break-all;display:flex;align-items:center;gap:6px}
+.img-item:hover{background:#0f3460}
+.img-item.active{background:#e94560;color:#fff}
+.img-item .dot{width:7px;height:7px;border-radius:50%;background:#555;flex-shrink:0}
+.img-item.labeled .dot{background:#4caf50}
+
+/* ── detection canvas area ── */
+#det-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#toolbar{background:#16213e;padding:6px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #0f3460;flex-wrap:wrap;flex-shrink:0}
+#toolbar button{background:#0f3460;border:1px solid #333;color:#e0e0e0;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.82rem}
+#toolbar button.active,#toolbar button:hover{background:#e94560;color:#fff;border-color:#e94560}
+#toolbar select{background:#0f3460;border:1px solid #333;color:#e0e0e0;padding:4px 6px;border-radius:4px;font-size:.82rem}
+#canvas-wrap{flex:1;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center}
+canvas{cursor:crosshair}
+
+/* detection right panel */
+#det-right{width:210px;background:#16213e;border-left:1px solid #0f3460;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+#box-list{flex:1;overflow-y:auto;padding:6px}
+.box-item{background:#0f3460;border-radius:4px;padding:6px;margin-bottom:5px;font-size:.78rem;display:flex;justify-content:space-between;align-items:center;gap:4px}
+.box-item .cls-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.box-item.selected{border:1px solid #e94560}
+.box-item button{background:none;border:none;color:#e94560;cursor:pointer;font-size:.9rem;padding:0 2px}
+.box-item select{background:#1a1a2e;border:1px solid #333;color:#e0e0e0;border-radius:3px;font-size:.75rem;padding:1px 3px}
+
+/* ── classification area ── */
+#clf-area{flex:1;display:flex;overflow:hidden}
+#clf-img-wrap{flex:1;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#clf-img-wrap img{max-width:100%;max-height:100%;object-fit:contain}
+#clf-right{width:240px;background:#16213e;border-left:1px solid #0f3460;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+#clf-nav{padding:8px;border-bottom:1px solid #0f3460;display:flex;gap:6px}
+#clf-nav button{flex:1;background:#0f3460;border:1px solid #333;color:#e0e0e0;padding:4px;border-radius:4px;cursor:pointer;font-size:.8rem}
+#clf-nav button:hover{background:#e94560;border-color:#e94560}
+#clf-classes{flex:1;overflow-y:auto;padding:8px}
+.clf-class-row{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:4px;cursor:pointer;font-size:.85rem;user-select:none}
+.clf-class-row:hover{background:#0f3460}
+.clf-class-row input[type=checkbox]{width:16px;height:16px;accent-color:#e94560;cursor:pointer;flex-shrink:0}
+.clf-class-row .cls-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.clf-class-row label{cursor:pointer;flex:1}
+#clf-counter{padding:8px;border-top:1px solid #0f3460;font-size:.78rem;color:#888;text-align:center}
+
+/* modals */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:#16213e;border:1px solid #0f3460;border-radius:8px;padding:20px;min-width:360px;max-width:92vw;max-height:90vh;overflow-y:auto}
+.modal h2{font-size:1rem;margin-bottom:14px;color:#e94560}
+.modal label{display:block;font-size:.82rem;margin-bottom:4px;color:#aaa}
+.modal input,.modal textarea,.modal select{width:100%;background:#0f3460;border:1px solid #333;color:#e0e0e0;border-radius:4px;padding:6px;margin-bottom:10px;font-size:.85rem}
+.modal textarea{resize:vertical;min-height:70px}
+.modal .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.modal .actions button{padding:6px 16px;border-radius:4px;border:none;cursor:pointer;font-size:.85rem}
+.btn-primary{background:#e94560;color:#fff}
+.btn-secondary{background:#0f3460;color:#e0e0e0}
+.btn-secondary:hover{background:#333}
+.task-picker{display:flex;gap:8px;margin-bottom:12px}
+.task-card{flex:1;padding:10px 8px;border:2px solid #333;border-radius:6px;cursor:pointer;text-align:center;transition:border-color .15s,background .15s}
+.task-card:hover{border-color:#888}
+.task-card.selected{border-color:#e94560;background:#1f0d15}
+.task-card .tc-icon{font-size:1.4rem;margin-bottom:4px}
+.task-card .tc-name{font-size:.82rem;font-weight:600}
+.task-card .tc-desc{font-size:.72rem;color:#888;margin-top:2px}
+
+/* slider rows */
+.field{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.82rem}
+.field label{width:100px;flex-shrink:0;color:#aaa}
+.field input[type=range]{flex:1}
+.field span{width:38px;text-align:right;font-size:.78rem}
+#ratio-summary{font-size:.8rem;color:#aaa;margin-bottom:10px;padding:6px;background:#0f3460;border-radius:4px}
+
+#status-bar{background:#0f3460;padding:3px 12px;font-size:.75rem;color:#888;flex-shrink:0}
+
+/* export progress modal */
+#export-progress-modal .modal{min-width:380px;text-align:center}
+#export-progress-modal h2{margin-bottom:6px}
+#exp-prog-label{font-size:.82rem;color:#aaa;margin-bottom:16px;min-height:1.2em}
+#exp-prog-track{background:#0a0a1a;border-radius:8px;height:14px;overflow:hidden;margin-bottom:10px;position:relative}
+#exp-prog-fill{height:100%;width:0%;border-radius:8px;background:linear-gradient(90deg,#e94560,#ff8c69);transition:width .4s cubic-bezier(.4,0,.2,1);position:relative}
+#exp-prog-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.25) 50%,transparent 100%);animation:shimmer 1.4s infinite}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+#exp-prog-pct{font-size:1.6rem;font-weight:700;color:#e94560;margin-bottom:4px;font-variant-numeric:tabular-nums}
+#exp-prog-sub{font-size:.76rem;color:#555;min-height:1em}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI Label Studio</h1>
+  <span id="task-badge">no project</span>
+  <select id="project-select"><option value="">-- select project --</option></select>
+  <button onclick="openModal('new-project-modal')">+ Project</button>
+  <button onclick="openModal('import-modal')">Import</button>
+  <button onclick="openModal('export-modal')">Export</button>
+  <button onclick="openClassesModal()">Classes</button>
+</header>
+
+<div id="main">
+  <!-- shared sidebar -->
+  <div id="sidebar">
+    <div class="sidebar-section">
+      <h3>Images</h3>
+      <input type="file" id="upload-input" multiple accept="image/*" style="display:none" onchange="uploadImages(this)">
+      <button style="width:100%;margin-top:2px" onclick="document.getElementById('upload-input').click()">+ Upload Images</button>
+    </div>
+    <div id="image-list"></div>
+  </div>
+
+  <!-- detection area (canvas + right panel) -->
+  <div id="det-area" style="display:none">
+    <div id="toolbar">
+      <button id="btn-draw" class="active" onclick="setTool('draw')">Draw Box</button>
+      <button id="btn-select" onclick="setTool('select')">Select/Move</button>
+      <button onclick="deleteSelected()">Delete Box</button>
+      <button onclick="clearBoxes()">Clear All</button>
+      <span style="margin-left:auto;font-size:.8rem">Class:</span>
+      <select id="class-select"></select>
+      <button onclick="prevImage()">&#8592;</button>
+      <button onclick="nextImage()">&#8594;</button>
+    </div>
+    <div id="canvas-wrap"><canvas id="canvas"></canvas></div>
+    <div id="status-bar">No project loaded.</div>
+  </div>
+  <div id="det-right" style="display:none">
+    <div class="sidebar-section"><h3>Bounding Boxes</h3></div>
+    <div id="box-list"></div>
+  </div>
+
+  <!-- classification area -->
+  <div id="clf-area" style="display:none">
+    <div id="clf-img-wrap"><img id="clf-img" src="" alt=""></div>
+    <div id="clf-right">
+      <div class="sidebar-section"><h3>Labels</h3></div>
+      <div id="clf-nav">
+        <button onclick="prevImage()">&#8592; Prev</button>
+        <button onclick="nextImage()">Next &#8594;</button>
+      </div>
+      <div id="clf-classes"></div>
+      <div id="clf-counter">0 / 0</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modals ── -->
+
+<div class="modal-overlay" id="new-project-modal">
+  <div class="modal">
+    <h2>New Project</h2>
+    <label>Project Name</label>
+    <input id="np-name" placeholder="my-dataset">
+    <label style="margin-bottom:8px">Task Type</label>
+    <div class="task-picker">
+      <div class="task-card selected" id="tc-detection" onclick="selectTaskCard('detection')">
+        <div class="tc-icon">&#x1F4E6;</div>
+        <div class="tc-name">Detection</div>
+        <div class="tc-desc">Draw bounding boxes</div>
+      </div>
+      <div class="task-card" id="tc-classification" onclick="selectTaskCard('classification')">
+        <div class="tc-icon">&#x2714;</div>
+        <div class="tc-name">Classification</div>
+        <div class="tc-desc">Tick class labels</div>
+      </div>
+    </div>
+    <label>Classes (comma-separated)</label>
+    <input id="np-classes" placeholder="cat, dog, car">
+    <div class="actions">
+      <button class="btn-secondary" onclick="closeModal('new-project-modal')">Cancel</button>
+      <button class="btn-primary" onclick="createProject()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="classes-modal">
+  <div class="modal">
+    <h2>Edit Classes</h2>
+    <label>Classes (one per line)</label>
+    <textarea id="cls-editor" rows="8"></textarea>
+    <div class="actions">
+      <button class="btn-secondary" onclick="closeModal('classes-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveClasses()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <h2>Import Existing Dataset</h2>
+    <p style="font-size:.8rem;color:#aaa;margin-bottom:10px">Detection: train/valid/test or flat structure.<br>Classification: example2 format (flat images + _classes.csv).</p>
+    <label>Server-side folder path</label>
+    <input id="import-path" placeholder="/path/to/dataset">
+    <div class="actions">
+      <button class="btn-secondary" onclick="closeModal('import-modal')">Cancel</button>
+      <button class="btn-primary" onclick="importDataset()">Import</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="export-modal">
+  <div class="modal" style="min-width:420px">
+    <h2>Export Dataset</h2>
+
+    <p style="font-size:.72rem;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Split ratios</p>
+    <div class="field"><label>Train %</label><input type="range" id="exp-train" min="0" max="100" step="1" value="70" oninput="onRatioChange()"><span id="exp-train-val">70%</span></div>
+    <div class="field"><label>Valid %</label><input type="range" id="exp-valid" min="0" max="100" step="1" value="20" oninput="onRatioChange()"><span id="exp-valid-val">20%</span></div>
+    <div class="field"><label>Test %</label><input type="range" id="exp-test"  min="0" max="100" step="1" value="10" oninput="onRatioChange()"><span id="exp-test-val">10%</span></div>
+    <div id="ratio-summary" style="margin-bottom:10px">Train 70% · Valid 20% · Test 10%</div>
+    <div class="field" style="margin-bottom:14px"><label>Random Seed</label><input type="number" id="exp-seed" value="42" style="flex:1;margin-bottom:0"></div>
+
+    <div style="border-top:1px solid #0f3460;padding-top:12px;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.85rem;margin-bottom:10px">
+        <input type="checkbox" id="aug-enable" onchange="toggleAugFields()">
+        <span>Augment training set on export</span>
+      </label>
+      <div id="aug-fields" style="display:none">
+        <p style="font-size:.74rem;color:#888;margin-bottom:8px">Each copy uses a random value within ± the range shown.</p>
+        <div class="field"><label>Copies / image</label><input type="range" id="aug-copies" min="1" max="20" step="1" value="2" oninput="syncVal(this,'aug-copies-val')"><span id="aug-copies-val">2</span></div>
+        <div class="field"><label>Brightness ±</label><input type="range" id="aug-brightness" min="0" max="1" step="0.05" value="0.2" oninput="syncPct(this,'aug-brightness-val')"><span id="aug-brightness-val">20%</span></div>
+        <div class="field"><label>Hue ±</label><input type="range" id="aug-hue" min="0" max="1" step="0.05" value="0.1" oninput="syncPct(this,'aug-hue-val')"><span id="aug-hue-val">10%</span></div>
+        <div class="field"><label>Rotate ± °</label><input type="range" id="aug-rotate" min="0" max="45" step="1" value="15" oninput="syncVal(this,'aug-rotate-val')"><span id="aug-rotate-val">15</span></div>
+        <div class="field"><label>Tilt ± °</label><input type="range" id="aug-tilt" min="0" max="30" step="1" value="10" oninput="syncVal(this,'aug-tilt-val')"><span id="aug-tilt-val">10</span></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-secondary" onclick="closeModal('export-modal')">Cancel</button>
+      <button class="btn-primary" onclick="exportDataset()">Download ZIP</button>
+    </div>
+  </div>
+</div>
+
+<!-- export progress modal (non-dismissable) -->
+<div class="modal-overlay" id="export-progress-modal">
+  <div class="modal">
+    <h2>Exporting Dataset</h2>
+    <p id="exp-prog-label">Preparing&hellip;</p>
+    <div id="exp-prog-track"><div id="exp-prog-fill"></div></div>
+    <div id="exp-prog-pct">0%</div>
+    <div id="exp-prog-sub"></div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const state = {
+  project: null,
+  taskType: "detection",  // "detection" | "classification"
+  images: [],
+  currentIdx: -1,
+  // detection
+  boxes: [],
+  classes: ["object"],
+  selectedBox: -1,
+  tool: "draw",
+  dragging: false, dragStart: null, dragEnd: null,
+  movingBox: null, movingOffset: null, resizing: null,
+  imgEl: null,
+  // classification
+  clfSelected: new Set(),  // set of selected class indices
+};
+
+const canvas = document.getElementById("canvas");
+const ctx    = canvas.getContext("2d");
+const COLORS = ["#e94560","#00b4d8","#80ed99","#ffb703","#ff6b6b","#c77dff","#ffd60a","#06d6a0","#f4a261","#a8dadc"];
+const classColor = id => COLORS[id % COLORS.length];
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener("load", () => {
+  loadProjects();
+  setupCanvas();
+  setupKeyboard();
+});
+
+function syncVal(el, id){ document.getElementById(id).textContent = el.value; }
+function syncPct(el, id){ document.getElementById(id).textContent = Math.round(el.value*100)+"%"; }
+function toggleAugFields(){
+  document.getElementById("aug-fields").style.display =
+    document.getElementById("aug-enable").checked ? "block" : "none";
+}
+
+// ── task card picker ──────────────────────────────────────────────────────────
+let _selectedTask = "detection";
+function selectTaskCard(t){
+  _selectedTask = t;
+  document.getElementById("tc-detection").classList.toggle("selected", t==="detection");
+  document.getElementById("tc-classification").classList.toggle("selected", t==="classification");
+}
+
+// ── ratio sliders ─────────────────────────────────────────────────────────────
+function onRatioChange(){
+  const t=+document.getElementById("exp-train").value;
+  const v=+document.getElementById("exp-valid").value;
+  const ts=+document.getElementById("exp-test").value;
+  const tot=t+v+ts||1;
+  document.getElementById("exp-train-val").textContent=t+"%";
+  document.getElementById("exp-valid-val").textContent=v+"%";
+  document.getElementById("exp-test-val").textContent=ts+"%";
+  document.getElementById("ratio-summary").textContent=
+    `Train ${Math.round(t/tot*100)}% · Valid ${Math.round(v/tot*100)}% · Test ${Math.round(ts/tot*100)}%`;
+}
+
+// ── UI mode switching ─────────────────────────────────────────────────────────
+function showTaskUI(task){
+  const det  = task === "detection";
+  document.getElementById("det-area").style.display  = det ? "flex" : "none";
+  document.getElementById("det-right").style.display = det ? "flex" : "none";
+  document.getElementById("clf-area").style.display  = det ? "none" : "flex";
+  const badge = document.getElementById("task-badge");
+  badge.textContent = task;
+  badge.className   = task;
+}
+
+// ── projects ──────────────────────────────────────────────────────────────────
+async function loadProjects(){
+  const names = await fetch("/api/projects").then(r=>r.json());
+  const sel   = document.getElementById("project-select");
+  const cur   = sel.value;
+  sel.innerHTML = '<option value="">-- select project --</option>';
+  names.forEach(n=>{ const o=document.createElement("option"); o.value=o.textContent=n; sel.appendChild(o); });
+  if(cur && names.includes(cur)) sel.value = cur;
+  sel.onchange = () => selectProject(sel.value);
+}
+
+async function selectProject(name){
+  if(!name) return;
+  state.project = name;
+  const meta = await fetch(`/api/projects/${name}/meta`).then(r=>r.json());
+  state.classes  = meta.classes || ["object"];
+  state.taskType = meta.task    || "detection";
+  showTaskUI(state.taskType);
+  rebuildClassSelect();
+  loadImageList();
+}
+
+async function createProject(){
+  const name = document.getElementById("np-name").value.trim();
+  const classStr = document.getElementById("np-classes").value;
+  const classes  = classStr.split(",").map(s=>s.trim()).filter(Boolean);
+  if(!name){ alert("Name required"); return; }
+  const res = await fetch("/api/projects",{
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({name, classes:classes.length?classes:["object"], task:_selectedTask})
+  }).then(r=>r.json());
+  if(res.error){ alert(res.error); return; }
+  closeModal("new-project-modal");
+  document.getElementById("np-name").value="";
+  document.getElementById("np-classes").value="";
+  selectTaskCard("detection");
+  await loadProjects();
+  document.getElementById("project-select").value = name;
+  await selectProject(name);
+}
+
+// ── image list ────────────────────────────────────────────────────────────────
+async function loadImageList(){
+  if(!state.project) return;
+  state.images = await fetch(`/api/projects/${state.project}/images`).then(r=>r.json());
+  renderImageList();
+  if(state.images.length>0) loadImage(0);
+  else{ state.currentIdx=-1; setStatus("No images. Upload some to get started."); }
+}
+
+function renderImageList(){
+  const list = document.getElementById("image-list");
+  list.innerHTML="";
+  state.images.forEach((name,i)=>{
+    const el = document.createElement("div");
+    el.className = "img-item"+(i===state.currentIdx?" active":"");
+    el.dataset.idx = i;
+    el.innerHTML = `<div class="dot"></div><span>${name}</span>`;
+    el.onclick = ()=>loadImage(i);
+    list.appendChild(el);
+  });
+}
+
+function setLabelDot(idx, on){
+  const el = document.querySelector(`.img-item[data-idx="${idx}"]`);
+  if(el) el.classList.toggle("labeled", on);
+}
+
+async function uploadImages(input){
+  if(!state.project){ alert("Select a project first"); return; }
+  const form = new FormData();
+  for(const f of input.files) form.append("files",f);
+  await fetch(`/api/projects/${state.project}/images/upload`,{method:"POST",body:form});
+  input.value="";
+  loadImageList();
+}
+
+// ── load image ────────────────────────────────────────────────────────────────
+async function loadImage(idx){
+  if(!state.project||state.images.length===0) return;
+  await saveCurrentLabels();
+  state.currentIdx = idx;
+  const fname = state.images[idx];
+  if(state.taskType==="detection"){
+    await loadDetectionImage(fname, idx);
+  } else {
+    await loadClassificationImage(fname, idx);
+  }
+  renderImageList();
+}
+
+function prevImage(){ if(state.currentIdx>0) loadImage(state.currentIdx-1); }
+function nextImage(){ if(state.currentIdx<state.images.length-1) loadImage(state.currentIdx+1); }
+
+async function saveCurrentLabels(){
+  if(!state.project||state.currentIdx<0) return;
+  const fname = state.images[state.currentIdx];
+  if(state.taskType==="detection"){
+    await fetch(`/api/projects/${state.project}/labels/${encodeURIComponent(fname)}`,{
+      method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(state.boxes)
+    });
+    setLabelDot(state.currentIdx, state.boxes.length>0);
+  } else {
+    const arr = [...state.clfSelected];
+    await fetch(`/api/projects/${state.project}/clf_labels/${encodeURIComponent(fname)}`,{
+      method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(arr)
+    });
+    setLabelDot(state.currentIdx, arr.length>0);
+  }
+}
+
+// ── detection labeling ────────────────────────────────────────────────────────
+async function loadDetectionImage(fname, idx){
+  const img = new Image();
+  img.onload = async ()=>{
+    state.imgEl = img;
+    fitCanvas(img);
+    state.boxes = await fetch(`/api/projects/${state.project}/labels/${encodeURIComponent(fname)}`).then(r=>r.json());
+    state.selectedBox = -1;
+    redraw(); renderBoxList();
+    setLabelDot(idx, state.boxes.length>0);
+    setStatus(`${fname}  (${img.naturalWidth}×${img.naturalHeight})  [${idx+1}/${state.images.length}]`);
+  };
+  img.src = `/api/projects/${state.project}/images/${encodeURIComponent(fname)}`;
+}
+
+function fitCanvas(img){
+  const wrap = document.getElementById("canvas-wrap");
+  const scale = Math.min((wrap.clientWidth-4)/img.naturalWidth, (wrap.clientHeight-4)/img.naturalHeight, 1);
+  canvas.width  = Math.round(img.naturalWidth  * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+}
+
+function setupCanvas(){
+  canvas.addEventListener("mousedown", onMouseDown);
+  canvas.addEventListener("mousemove", onMouseMove);
+  canvas.addEventListener("mouseup",   onMouseUp);
+  canvas.addEventListener("contextmenu", e=>e.preventDefault());
+  window.addEventListener("resize", ()=>{ if(state.imgEl&&state.taskType==="detection"){ fitCanvas(state.imgEl); redraw(); }});
+}
+
+function canvasPos(e){ const r=canvas.getBoundingClientRect(); return{x:e.clientX-r.left,y:e.clientY-r.top}; }
+function toCanvas(cx,cy,w,h){ return{x:(cx-w/2)*canvas.width,y:(cy-h/2)*canvas.height,w:w*canvas.width,h:h*canvas.height}; }
+
+function hitTest(px,py){
+  for(let i=state.boxes.length-1;i>=0;i--){
+    const b=state.boxes[i],{x,y,w,h}=toCanvas(b.cx,b.cy,b.w,b.h);
+    if(px>=x&&px<=x+w&&py>=y&&py<=y+h) return i;
+  }
+  return -1;
+}
+
+function getResizeHandle(px,py,b){
+  const{x,y,w,h}=toCanvas(b.cx,b.cy,b.w,b.h),S=8;
+  for(const[n,hx,hy] of [["tl",x,y],["tr",x+w,y],["bl",x,y+h],["br",x+w,y+h]])
+    if(Math.abs(px-hx)<S&&Math.abs(py-hy)<S) return n;
+  return null;
+}
+
+function onMouseDown(e){
+  if(!state.imgEl||state.taskType!=="detection") return;
+  const{x,y}=canvasPos(e);
+  if(state.tool==="draw"){ state.dragging=true; state.dragStart=state.dragEnd={x,y}; }
+  else{
+    if(state.selectedBox>=0){
+      const h=getResizeHandle(x,y,state.boxes[state.selectedBox]);
+      if(h){ state.resizing={handle:h,idx:state.selectedBox,origBox:{...state.boxes[state.selectedBox]}}; return; }
+    }
+    const hit=hitTest(x,y); state.selectedBox=hit;
+    if(hit>=0){ const b=state.boxes[hit]; state.movingBox=hit; state.movingOffset={dx:x-b.cx*canvas.width,dy:y-b.cy*canvas.height}; }
+    renderBoxList(); redraw();
+  }
+}
+
+function onMouseMove(e){
+  if(!state.imgEl||state.taskType!=="detection") return;
+  const{x,y}=canvasPos(e);
+  if(state.tool==="draw"&&state.dragging){ state.dragEnd={x,y}; redraw(); }
+  else if(state.movingBox!==null){
+    const b=state.boxes[state.movingBox];
+    b.cx=Math.max(b.w/2,Math.min(1-b.w/2,(x-state.movingOffset.dx)/canvas.width));
+    b.cy=Math.max(b.h/2,Math.min(1-b.h/2,(y-state.movingOffset.dy)/canvas.height));
+    redraw();
+  } else if(state.resizing){
+    const{handle,idx,origBox:ob}=state.resizing;
+    let{x:bx,y:by,w:bw,h:bh}=toCanvas(ob.cx,ob.cy,ob.w,ob.h);
+    let x1=bx,y1=by,x2=bx+bw,y2=by+bh;
+    if(handle.includes("l")) x1=Math.min(x,x2-2);
+    if(handle.includes("r")) x2=Math.max(x,x1+2);
+    if(handle.includes("t")) y1=Math.min(y,y2-2);
+    if(handle.includes("b")) y2=Math.max(y,y1+2);
+    const b=state.boxes[idx];
+    b.cx=(x1+x2)/(2*canvas.width); b.cy=(y1+y2)/(2*canvas.height);
+    b.w=(x2-x1)/canvas.width;      b.h=(y2-y1)/canvas.height;
+    redraw();
+  }
+}
+
+function onMouseUp(e){
+  if(state.tool==="draw"&&state.dragging){
+    state.dragging=false;
+    const{x:x1,y:y1}=state.dragStart,{x:x2,y:y2}=state.dragEnd;
+    const rx1=Math.min(x1,x2),ry1=Math.min(y1,y2),rx2=Math.max(x1,x2),ry2=Math.max(y1,y2);
+    if(rx2-rx1>5&&ry2-ry1>5){
+      const cid=parseInt(document.getElementById("class-select").value||"0");
+      state.boxes.push({class_id:cid,cx:(rx1+rx2)/(2*canvas.width),cy:(ry1+ry2)/(2*canvas.height),
+        w:(rx2-rx1)/canvas.width,h:(ry2-ry1)/canvas.height});
+      state.selectedBox=state.boxes.length-1; renderBoxList();
+    }
+    redraw();
+  }
+  state.movingBox=null; state.resizing=null;
+}
+
+function redraw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(state.imgEl) ctx.drawImage(state.imgEl,0,0,canvas.width,canvas.height);
+  if(state.dragging&&state.dragStart&&state.dragEnd){
+    const s=state.dragStart,en=state.dragEnd;
+    ctx.strokeStyle="#fff"; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+    ctx.strokeRect(Math.min(s.x,en.x),Math.min(s.y,en.y),Math.abs(en.x-s.x),Math.abs(en.y-s.y));
+    ctx.setLineDash([]);
+  }
+  state.boxes.forEach((b,i)=>{
+    const{x,y,w,h}=toCanvas(b.cx,b.cy,b.w,b.h),color=classColor(b.class_id),sel=i===state.selectedBox;
+    ctx.strokeStyle=color; ctx.lineWidth=sel?2.5:1.5; ctx.strokeRect(x,y,w,h);
+    ctx.fillStyle=color+"22"; ctx.fillRect(x,y,w,h);
+    const cls=state.classes[b.class_id]||`cls${b.class_id}`;
+    const tw=ctx.measureText(cls).width+8;
+    ctx.fillStyle=color; ctx.fillRect(x,y-16,tw,16);
+    ctx.fillStyle="#fff"; ctx.font="11px system-ui"; ctx.fillText(cls,x+4,y-4);
+    if(sel&&state.tool==="select")
+      [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([hx,hy])=>{
+        ctx.fillStyle="#fff"; ctx.fillRect(hx-4,hy-4,8,8);
+        ctx.strokeStyle=color; ctx.lineWidth=1; ctx.strokeRect(hx-4,hy-4,8,8);
+      });
+  });
+}
+
+function setTool(t){
+  state.tool=t;
+  document.getElementById("btn-draw").classList.toggle("active",t==="draw");
+  document.getElementById("btn-select").classList.toggle("active",t==="select");
+  canvas.style.cursor=t==="draw"?"crosshair":"default";
+}
+
+function deleteSelected(){ if(state.selectedBox<0) return; state.boxes.splice(state.selectedBox,1); state.selectedBox=-1; renderBoxList(); redraw(); }
+function clearBoxes(){ if(!confirm("Clear all boxes?")) return; state.boxes=[]; state.selectedBox=-1; renderBoxList(); redraw(); }
+
+function renderBoxList(){
+  const list=document.getElementById("box-list"); list.innerHTML="";
+  state.boxes.forEach((b,i)=>{
+    const cls=state.classes[b.class_id]||`cls${b.class_id}`;
+    const el=document.createElement("div");
+    el.className="box-item"+(i===state.selectedBox?" selected":"");
+    el.innerHTML=`<span class="cls-label" style="color:${classColor(b.class_id)}">${cls}</span>
+      <select onchange="changeBoxClass(${i},this.value)">${state.classes.map((c,ci)=>`<option value="${ci}"${ci===b.class_id?" selected":""}>${c}</option>`).join("")}</select>
+      <button onclick="removeBox(${i})">✕</button>`;
+    el.addEventListener("click",ev=>{ if(ev.target.tagName==="SELECT"||ev.target.tagName==="BUTTON") return; state.selectedBox=i; renderBoxList(); redraw(); });
+    list.appendChild(el);
+  });
+}
+
+function changeBoxClass(idx,cid){ state.boxes[idx].class_id=parseInt(cid); renderBoxList(); redraw(); }
+function removeBox(idx){ state.boxes.splice(idx,1); if(state.selectedBox>=state.boxes.length) state.selectedBox=-1; renderBoxList(); redraw(); }
+
+// ── classification labeling ───────────────────────────────────────────────────
+async function loadClassificationImage(fname, idx){
+  state.clfSelected = new Set(
+    await fetch(`/api/projects/${state.project}/clf_labels/${encodeURIComponent(fname)}`).then(r=>r.json())
+  );
+  document.getElementById("clf-img").src =
+    `/api/projects/${state.project}/images/${encodeURIComponent(fname)}`;
+  renderClfClasses();
+  setLabelDot(idx, state.clfSelected.size>0);
+  updateClfCounter();
+}
+
+function renderClfClasses(){
+  const container = document.getElementById("clf-classes");
+  container.innerHTML = "";
+  state.classes.forEach((cls, i)=>{
+    const row = document.createElement("div");
+    row.className = "clf-class-row";
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = `clf-cls-${i}`;
+    chk.checked = state.clfSelected.has(i);
+    chk.onchange = ()=>{ if(chk.checked) state.clfSelected.add(i); else state.clfSelected.delete(i); updateClfCounter(); setLabelDot(state.currentIdx, state.clfSelected.size>0); };
+    const dot = document.createElement("div");
+    dot.className = "cls-dot";
+    dot.style.background = classColor(i);
+    const lbl = document.createElement("label");
+    lbl.htmlFor = `clf-cls-${i}`;
+    lbl.textContent = cls;
+    row.appendChild(chk); row.appendChild(dot); row.appendChild(lbl);
+    row.onclick = e=>{ if(e.target===chk||e.target===lbl) return; chk.checked=!chk.checked; chk.dispatchEvent(new Event("change")); };
+    container.appendChild(row);
+  });
+}
+
+function updateClfCounter(){
+  document.getElementById("clf-counter").textContent =
+    `${state.clfSelected.size} class${state.clfSelected.size!==1?"es":""} selected · image ${state.currentIdx+1} / ${state.images.length}`;
+}
+
+// ── classes ───────────────────────────────────────────────────────────────────
+function rebuildClassSelect(){
+  document.getElementById("class-select").innerHTML =
+    state.classes.map((c,i)=>`<option value="${i}">${c}</option>`).join("");
+}
+
+function openClassesModal(){
+  document.getElementById("cls-editor").value=state.classes.join("\n");
+  openModal("classes-modal");
+}
+
+async function saveClasses(){
+  const classes=document.getElementById("cls-editor").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!classes.length){ alert("Need at least one class"); return; }
+  state.classes=classes;
+  rebuildClassSelect();
+  if(state.taskType==="detection"){ renderBoxList(); redraw(); }
+  else renderClfClasses();
+  if(state.project)
+    await fetch(`/api/projects/${state.project}/meta`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({classes})});
+  closeModal("classes-modal");
+}
+
+// ── import ────────────────────────────────────────────────────────────────────
+async function importDataset(){
+  if(!state.project){ alert("Select a project first"); return; }
+  const path=document.getElementById("import-path").value.trim();
+  if(!path){ alert("Path required"); return; }
+  const res=await fetch(`/api/projects/${state.project}/import`,{
+    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path})
+  }).then(r=>r.json());
+  if(res.error){ alert(res.error); return; }
+  const meta=await fetch(`/api/projects/${state.project}/meta`).then(r=>r.json());
+  state.classes=meta.classes||state.classes;
+  rebuildClassSelect();
+  closeModal("import-modal");
+  loadImageList();
+  alert(`Imported ${res.copied} images.`);
+}
+
+// ── export progress ───────────────────────────────────────────────────────────
+let _expTimer = null;
+
+function _setProgress(pct, label, sub){
+  document.getElementById("exp-prog-fill").style.width = pct + "%";
+  document.getElementById("exp-prog-pct").textContent  = Math.round(pct) + "%";
+  if(label !== undefined) document.getElementById("exp-prog-label").textContent = label;
+  if(sub   !== undefined) document.getElementById("exp-prog-sub").textContent   = sub;
+}
+
+function _startProgressAnimation(augEnabled, augCopies, imageCount){
+  // Estimate stages: save labels → build zip → augment (if on) → package
+  const STAGES = [
+    { pct: 5,  label: "Saving labels…",          ms: 300 },
+    { pct: 20, label: "Shuffling & splitting…",  ms: 500 },
+    ...(augEnabled ? [
+      { pct: 55, label: `Augmenting (${augCopies}× per image)…`,
+        ms: Math.min(4000, imageCount * augCopies * 80) },
+    ] : []),
+    { pct: 80, label: "Packaging images…",       ms: Math.min(3000, imageCount * 15) },
+    { pct: 92, label: "Compressing ZIP…",        ms: 800 },
+    { pct: 96, label: "Finalising…",             ms: 400 },
+  ];
+
+  let i = 0;
+  function step(){
+    if(i >= STAGES.length) return;
+    const s = STAGES[i++];
+    _setProgress(s.pct, s.label);
+    _expTimer = setTimeout(step, s.ms);
+  }
+  step();
+}
+
+function _finishProgress(ok){
+  clearTimeout(_expTimer);
+  if(ok){
+    _setProgress(100, "Complete!", "");
+    // brief pause so the user sees 100% before the modal closes
+    setTimeout(()=> document.getElementById("export-progress-modal").classList.remove("open"), 700);
+  } else {
+    _setProgress(0, "Export failed.", "Check the server console for details.");
+    document.getElementById("exp-prog-fill").style.background = "#c0392b";
+    // allow dismissal on error
+    document.getElementById("export-progress-modal")
+      .addEventListener("click", function close(e){
+        if(e.target === this){ this.classList.remove("open"); this.removeEventListener("click",close); }
+      });
+  }
+}
+
+// ── export ────────────────────────────────────────────────────────────────────
+async function exportDataset(){
+  if(!state.project){ alert("Select a project first"); return; }
+  await saveCurrentLabels();
+
+  const train=+document.getElementById("exp-train").value;
+  const valid=+document.getElementById("exp-valid").value;
+  const test =+document.getElementById("exp-test").value;
+  const seed =parseInt(document.getElementById("exp-seed").value)||42;
+  const total=train+valid+test||1;
+  const augEnabled=document.getElementById("aug-enable").checked;
+  const augCopies =augEnabled ? parseInt(document.getElementById("aug-copies").value) : 0;
+  const augmentation=augEnabled?{
+    enabled:true, copies:augCopies,
+    brightness:parseFloat(document.getElementById("aug-brightness").value),
+    hue:parseFloat(document.getElementById("aug-hue").value),
+    rotate:parseFloat(document.getElementById("aug-rotate").value),
+    tilt:parseFloat(document.getElementById("aug-tilt").value),
+  }:{enabled:false};
+
+  // open progress modal and start animation
+  closeModal("export-modal");
+  const progModal = document.getElementById("export-progress-modal");
+  progModal.classList.add("open");
+  // reset bar
+  document.getElementById("exp-prog-fill").style.background = "";
+  _setProgress(0, "Preparing\u2026", "");
+  _startProgressAnimation(augEnabled, augCopies, state.images.length);
+
+  let ok = false;
+  try {
+    const res = await fetch(`/api/projects/${state.project}/export`,{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({train:train/total,valid:valid/total,test:test/total,seed,augmentation})
+    });
+    if(!res.ok) throw new Error("server error");
+    const blob = await res.blob();
+    ok = true;
+    _finishProgress(true);
+    // trigger download
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download=`${state.project}.zip`; a.click();
+    URL.revokeObjectURL(url);
+  } catch(err){
+    _finishProgress(false);
+  }
+}
+
+// ── keyboard ──────────────────────────────────────────────────────────────────
+function setupKeyboard(){
+  document.addEventListener("keydown",e=>{
+    if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
+    if(e.key==="ArrowRight"||e.key==="d") nextImage();
+    if(e.key==="ArrowLeft" ||e.key==="a") prevImage();
+    if(state.taskType==="detection"){
+      if(e.key==="Delete"||e.key==="Backspace") deleteSelected();
+      if(e.key==="b") setTool("draw");
+      if(e.key==="s") setTool("select");
+      if(e.key==="Escape"){ state.selectedBox=-1; renderBoxList(); redraw(); }
+    }
+    if(state.taskType==="classification"){
+      // digit keys 1-9 toggle classes
+      const n=parseInt(e.key);
+      if(n>=1&&n<=state.classes.length){
+        const idx=n-1;
+        if(state.clfSelected.has(idx)) state.clfSelected.delete(idx);
+        else state.clfSelected.add(idx);
+        renderClfClasses(); updateClfCounter();
+        setLabelDot(state.currentIdx, state.clfSelected.size>0);
+      }
+    }
+  });
+}
+
+// ── modals ────────────────────────────────────────────────────────────────────
+function openModal(id){ document.getElementById(id).classList.add("open"); }
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+document.querySelectorAll(".modal-overlay").forEach(m=>{
+  if(m.id==="export-progress-modal") return;  // handled dynamically
+  m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("open"); });
+});
+
+function setStatus(msg){ const b=document.getElementById("status-bar"); if(b) b.textContent=msg; }
+</script>
+</body>
+</html>

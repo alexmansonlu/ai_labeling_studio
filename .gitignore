@@ -1,0 +1,38 @@
+# virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# example datasets
+example/
+example2/
+
+# generated projects data
+projects/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# logs & temp
+*.log
+tmp/
+temp/
